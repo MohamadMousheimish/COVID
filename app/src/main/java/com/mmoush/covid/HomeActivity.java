@@ -21,6 +21,9 @@ public class HomeActivity extends AppCompatActivity {
 
     public void startService(View v){
         String input = editTextInput.getText().toString();
+        if(input.isEmpty()){
+            input = "10";
+        }
         Intent serviceIntent = new Intent(this, LocationService.class);
         serviceIntent.putExtra("interval", input);
         ContextCompat.startForegroundService(this, serviceIntent);
