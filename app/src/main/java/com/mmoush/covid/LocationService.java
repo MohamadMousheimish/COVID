@@ -49,8 +49,13 @@ public class LocationService extends Service {
     public Queue<Coordinate> NonSentCoordinates;
     private Coordinate previousCoordinate = null;
 
+    // Server
     //private static String url = "http://23.96.61.115:8000/log/";
-    private static String url = "http://192.168.0.114:8000/log/";
+    //Bet Jeddo
+    // private static String url = "http://192.168.0.114:8000/log/";
+    // Bet 3amme
+    private static String url = "http://192.168.1.110:8000/log/";
+
     public static Handler myHandler = new Handler();
     AsyncHttpClient client = new AsyncHttpClient();
     private static int TIME_TO_WAIT = 10000;
@@ -85,13 +90,35 @@ public class LocationService extends Service {
 
                                 //Get timestamp
                                 Calendar cal = Calendar.getInstance();
-                                int hour = cal.get(Calendar.HOUR);
+                                int hour = cal.get(Calendar.HOUR_OF_DAY);
                                 int minutes = cal.get(Calendar.MINUTE);
                                 int seconds = cal.get(Calendar.SECOND);
                                 int year = cal.get(Calendar.YEAR);
                                 int month = cal.get(Calendar.MONTH);
+                                month++;
                                 int day = cal.get(Calendar.DAY_OF_MONTH);
-                                String timeStamp = year + "-" + (month + 1) + "-" + day + "T" + hour + ":" + minutes + ":" + seconds;
+
+                                String stringHour = Integer.toString(hour);
+                                String stringMinutes = Integer.toString(minutes);
+                                String stringSeconds = Integer.toString(seconds);
+                                String stringDays = Integer.toString(day);
+                                String stringMonth = Integer.toString(month);
+                                if(stringHour.length() == 1){
+                                    stringHour = "0" + stringHour;
+                                }
+                                if(stringMinutes.length() == 1) {
+                                    stringMinutes = "0" + stringMinutes;
+                                }
+                                if(stringSeconds.length() == 1) {
+                                    stringSeconds = "0" + stringSeconds;
+                                }
+                                if(stringMonth.length() == 1) {
+                                    stringMonth = "0" + stringMonth;
+                                }
+                                if(stringDays.length() == 1) {
+                                    stringDays = "0" + stringDays;
+                                }
+                                String timeStamp = year + "-" + stringMonth + "-" + stringDays + "T" + stringHour + ":" + stringMinutes + ":" + stringSeconds;
 
                                 // Logic to handle location object
                                 Coordinate newCoordinate = new Coordinate();
@@ -99,7 +126,7 @@ public class LocationService extends Service {
                                 newCoordinate.longitude = location.getLongitude();
                                 newCoordinate.timestamp = timeStamp;
                                 newCoordinate.user_id = android_id;
-                                Toast.makeText(LocationService.this, "Sending Lat: " + newCoordinate.latitude + " Long: " + newCoordinate.longitude, Toast.LENGTH_SHORT).show();
+                                // Toast.makeText(LocationService.this, "Sending Lat: " + newCoordinate.latitude + " Long: " + newCoordinate.longitude, Toast.LENGTH_SHORT).show();
                                 try {
                                     SendLocationToServer(newCoordinate);
                                 } catch (JSONException e) {
@@ -135,7 +162,7 @@ public class LocationService extends Service {
         client.post(this, url, entity, "application/json", new AsyncHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
-                Toast.makeText(LocationService.this, "Location is sent successfully", Toast.LENGTH_SHORT).show();
+                // Toast.makeText(LocationService.this, "Location is sent successfully", Toast.LENGTH_SHORT).show();
                 SentCoordinates.add(sentCoordinate);
             }
 
@@ -164,11 +191,11 @@ public class LocationService extends Service {
 
     void loop() {
         GetDeviceLocation();
-        // start();
+        start();
     }
 
     public void start() {
-        Toast.makeText(this, "Start Sending Location", Toast.LENGTH_SHORT).show();
+        // Toast.makeText(this, "Start Sending Locations", Toast.LENGTH_SHORT).show();
         myHandler.postDelayed(myRunnable, TIME_TO_WAIT);
     }
 
@@ -198,7 +225,7 @@ public class LocationService extends Service {
 
             Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("Intelligencia COVID")
-                    .setContentText("Location is being sent each " + TIME_TO_WAIT / 1000 + "seconds")
+                    .setContentText("Location is being sent each " + TIME_TO_WAIT / 1000)
                     .setSmallIcon(R.drawable.ic_location)
                     .setContentIntent(pendingIntent)
                     .build();
