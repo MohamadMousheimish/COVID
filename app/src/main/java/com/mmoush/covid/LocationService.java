@@ -11,9 +11,11 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
+import android.location.LocationListener;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
@@ -22,6 +24,9 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.loopj.android.http.AsyncHttpClient;
@@ -48,6 +53,7 @@ public class LocationService extends Service {
     public Queue<Coordinate> SentCoordinates;
     public Queue<Coordinate> NonSentCoordinates;
     private Coordinate previousCoordinate = null;
+    private LocationCallback locationCallback;
 
     // Server
     //private static String url = "http://23.96.61.115:8000/log/";
@@ -70,9 +76,73 @@ public class LocationService extends Service {
     @Override
     public void onCreate() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        android_id = Settings.Secure.getString(this.getContentResolver(), Settings.Secure.ANDROID_ID);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CUPCAKE) {
+            android_id = Settings.Secure.getString(this.getContentResolver(), Settings.Secure.ANDROID_ID);
+        }
         SentCoordinates = new LinkedList<>();
         NonSentCoordinates = new LinkedList<>();
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) {
+                    return;
+                }
+                for (Location location : locationResult.getLocations()) {
+                    if (location != null) {
+                        Log.d("Location", location.toString());
+
+                        //Get timestamp
+                        Calendar cal = Calendar.getInstance();
+                        int hour = cal.get(Calendar.HOUR_OF_DAY);
+                        int minutes = cal.get(Calendar.MINUTE);
+                        int seconds = cal.get(Calendar.SECOND);
+                        int year = cal.get(Calendar.YEAR);
+                        int month = cal.get(Calendar.MONTH);
+                        month++;
+                        int day = cal.get(Calendar.DAY_OF_MONTH);
+
+                        String stringHour = Integer.toString(hour);
+                        String stringMinutes = Integer.toString(minutes);
+                        String stringSeconds = Integer.toString(seconds);
+                        String stringDays = Integer.toString(day);
+                        String stringMonth = Integer.toString(month);
+                        if (stringHour.length() == 1) {
+                            stringHour = "0" + stringHour;
+                        }
+                        if (stringMinutes.length() == 1) {
+                            stringMinutes = "0" + stringMinutes;
+                        }
+                        if (stringSeconds.length() == 1) {
+                            stringSeconds = "0" + stringSeconds;
+                        }
+                        if (stringMonth.length() == 1) {
+                            stringMonth = "0" + stringMonth;
+                        }
+                        if (stringDays.length() == 1) {
+                            stringDays = "0" + stringDays;
+                        }
+                        String timeStamp = year + "-" + stringMonth + "-" + stringDays + "T" + stringHour + ":" + stringMinutes + ":" + stringSeconds;
+
+                        // Logic to handle location object
+                        Coordinate newCoordinate = new Coordinate();
+                        newCoordinate.latitude = location.getLatitude();
+                        newCoordinate.longitude = location.getLongitude();
+                        newCoordinate.timestamp = timeStamp;
+                        newCoordinate.user_id = android_id;
+                        // Toast.makeText(LocationService.this, "Sending Lat: " + newCoordinate.latitude + " Long: " + newCoordinate.longitude, Toast.LENGTH_SHORT).show();
+                        try {
+                            SendLocationToServer(newCoordinate);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        } catch (UnsupportedEncodingException e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        Toast.makeText(LocationService.this, "Please turn on your Location and try again!", Toast.LENGTH_LONG).show();
+                    }
+                }
+            }
+        };
         super.onCreate();
     }
 
@@ -81,66 +151,8 @@ public class LocationService extends Service {
         if (isPermissionGranted != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Location Permission Is Not Granted!", Toast.LENGTH_LONG).show();
         } else {
-            fusedLocationClient.getLastLocation()
-                    .addOnSuccessListener(new OnSuccessListener<Location>() {
-                        @Override
-                        public void onSuccess(Location location) {
-                            if (location != null) {
-                                Log.d("Location", location.toString());
-
-                                //Get timestamp
-                                Calendar cal = Calendar.getInstance();
-                                int hour = cal.get(Calendar.HOUR_OF_DAY);
-                                int minutes = cal.get(Calendar.MINUTE);
-                                int seconds = cal.get(Calendar.SECOND);
-                                int year = cal.get(Calendar.YEAR);
-                                int month = cal.get(Calendar.MONTH);
-                                month++;
-                                int day = cal.get(Calendar.DAY_OF_MONTH);
-
-                                String stringHour = Integer.toString(hour);
-                                String stringMinutes = Integer.toString(minutes);
-                                String stringSeconds = Integer.toString(seconds);
-                                String stringDays = Integer.toString(day);
-                                String stringMonth = Integer.toString(month);
-                                if(stringHour.length() == 1){
-                                    stringHour = "0" + stringHour;
-                                }
-                                if(stringMinutes.length() == 1) {
-                                    stringMinutes = "0" + stringMinutes;
-                                }
-                                if(stringSeconds.length() == 1) {
-                                    stringSeconds = "0" + stringSeconds;
-                                }
-                                if(stringMonth.length() == 1) {
-                                    stringMonth = "0" + stringMonth;
-                                }
-                                if(stringDays.length() == 1) {
-                                    stringDays = "0" + stringDays;
-                                }
-                                String timeStamp = year + "-" + stringMonth + "-" + stringDays + "T" + stringHour + ":" + stringMinutes + ":" + stringSeconds;
-
-                                // Logic to handle location object
-                                Coordinate newCoordinate = new Coordinate();
-                                newCoordinate.latitude = location.getLatitude();
-                                newCoordinate.longitude = location.getLongitude();
-                                newCoordinate.timestamp = timeStamp;
-                                newCoordinate.user_id = android_id;
-                                // Toast.makeText(LocationService.this, "Sending Lat: " + newCoordinate.latitude + " Long: " + newCoordinate.longitude, Toast.LENGTH_SHORT).show();
-                                try {
-                                    SendLocationToServer(newCoordinate);
-                                } catch (JSONException e) {
-                                    e.printStackTrace();
-                                } catch (UnsupportedEncodingException e) {
-                                    e.printStackTrace();
-                                }
-                            } else {
-                                Toast.makeText(LocationService.this, "Please turn on your Location and try again!", Toast.LENGTH_LONG).show();
-                            }
-                        }
-                    });
+            fusedLocationClient.requestLocationUpdates(new LocationRequest(), locationCallback, Looper.getMainLooper());
         }
-
     }
 
     private void ResendCoordinates() throws JSONException, UnsupportedEncodingException {
@@ -207,7 +219,7 @@ public class LocationService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         String timeInterval = intent.getStringExtra("interval");
-        if(timeInterval != null){
+        if (timeInterval != null) {
             Integer interval = Integer.parseInt(timeInterval);
             TIME_TO_WAIT = interval * 1000;
         }
@@ -230,7 +242,9 @@ public class LocationService extends Service {
                     .setContentIntent(pendingIntent)
                     .build();
 
-            startForeground(1, notification);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ECLAIR) {
+                startForeground(1, notification);
+            }
         }
 
         //do a heavy work on background thread
@@ -241,31 +255,33 @@ public class LocationService extends Service {
     private void startMyOwnForeground() {
 
 
-        NotificationChannel chan = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_NONE);
-        chan.setLightColor(Color.BLUE);
-        chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
-        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        assert manager != null;
-        manager.createNotificationChannel(chan);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel chan = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_NONE);
+            chan.setLightColor(Color.BLUE);
+            chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            assert manager != null;
+            manager.createNotificationChannel(chan);
 
-        Intent notificationIntent = new Intent(
-                this,
-                MainActivity.class
-        );
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+            Intent notificationIntent = new Intent(
+                    this,
+                    MainActivity.class
+            );
+            PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
 
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID);
-        Notification notification = notificationBuilder.setOngoing(true)
-                .setSmallIcon(R.drawable.ic_location)
-                .setContentTitle("Intelligencia COVID")
-                .setContentText("Location is being sent each " + TIME_TO_WAIT / 1000 + " seconds")
-                .setContentIntent(pendingIntent)
-                .setPriority(NotificationManager.IMPORTANCE_MIN)
-                .setCategory(Notification.CATEGORY_SERVICE)
-                .build();
+            NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID);
+            Notification notification = notificationBuilder.setOngoing(true)
+                    .setSmallIcon(R.drawable.ic_location)
+                    .setContentTitle("Intelligencia COVID")
+                    .setContentText("Location is being sent each " + TIME_TO_WAIT / 1000 + " seconds")
+                    .setContentIntent(pendingIntent)
+                    .setPriority(NotificationManager.IMPORTANCE_MIN)
+                    .setCategory(Notification.CATEGORY_SERVICE)
+                    .build();
 
-        startForeground(2, notification);
-        start();
+            startForeground(2, notification);
+            start();
+        }
 
     }
 
